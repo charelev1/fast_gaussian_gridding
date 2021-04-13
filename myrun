@@ -1,7 +1,0 @@
-test -f "*.o" &&  rm *.o
-chmod -R 777 ~/cppworkspace/periodograms/ && 
-g++ -g -c  main.cpp -lm  &&
-g++ -g -c  main.cpp -lm  &&
-gcc -g -c  rrgenV3.c -lm  &&
-g++ -o final.o  rrgenV3.o main.o &&
-rm rrgenV3.o main.o

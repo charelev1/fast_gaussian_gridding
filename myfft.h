@@ -2,7 +2,7 @@
 #define __MYFFT
 
 class _MYCMPX {
-public:
+   public:
     double real;
     double imag;
 
@@ -80,8 +80,6 @@ public:
         return complex;
     }
 
-
-    
     _MYCMPX operator/(const double &b) {
         _MYCMPX complex;
         complex.real = this->real / b;
@@ -89,12 +87,12 @@ public:
         return complex;
     }
 
-    void operator()(const double &a,const double &b) {
+    void operator()(const double &a, const double &b) {
         this->real = a;
         this->imag = b;
     }
-
 };
+
 
 void fft_iter(_MYCMPX *data, unsigned int N);
 
