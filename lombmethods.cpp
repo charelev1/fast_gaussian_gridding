@@ -1,3 +1,6 @@
+#include "lombmethods.h"
+
+#include <chrono>
 #include <cmath>
 #include <cstdlib>
 #include <iostream>
@@ -11,6 +14,8 @@
 #define MAX(x, y) (x > y) ? x : y
 #define LOGVAR(x) std::cout << #x << " = " << x << "\n"
 #define LOG(x) std::cout << x << "\n"
+#define CLOCK_NOW std::chrono::high_resolution_clock::now()
+
 constexpr double evaluate_trig(double sumh_real, double sumh_image,
                                double sum2_real, double sum2_image, double nt) {
     double hypo = sqrt(sum2_real * sum2_real + sum2_image * sum2_image);
@@ -65,31 +70,44 @@ void extripolation(double *t, double *x, double fac, int nfreq, int macc,
 }
 
 void fastlomb_extri(double *Pextri, double *x, double *t, double *fin, int nt,
-                    int nf, const unsigned int macc) {
+                    int nf, const unsigned int macc, _TIME &extrip) {
     double expo = floor(2 * nf * macc);
     int nfreq = (int)pow(2, ceil(log2(expo)));
-
     _MYCMPX *wk1 = new _MYCMPX[2 * nfreq];
     _MYCMPX *wk2 = new _MYCMPX[2 * nfreq];
 
     double fac = 2 * nfreq * fin[0];
 
+    auto begin = CLOCK_NOW;
     extripolation(t, x, fac, nfreq, macc, wk1, wk2, nt);
+    auto end = CLOCK_NOW;
+    std::chrono::duration<double> elapsed = end - begin;
+    extrip.grid = elapsed.count();
 
+    begin = CLOCK_NOW;
     fft_iter(wk1, (unsigned int)2 * nfreq);
-    LOGVAR(2 * nfreq);
     fft_iter(wk2, (unsigned int)2 * nfreq);
+    end = CLOCK_NOW;
+    elapsed = end - begin;
+    extrip.fft = elapsed.count();
 
+    begin = CLOCK_NOW;
     for (int i = 0; i < nf; i++) {
         Pextri[i] = evaluate_trig(wk1[i + 1].real, wk1[i + 1].imag,
                                   wk2[i + 1].real, wk2[i + 1].imag, nt);
     }
+    end = CLOCK_NOW;
+    elapsed = end - begin;
+    extrip.lomb = elapsed.count();
+
     delete[] wk1;
     delete[] wk2;
 }
 
 void lombgolden(double *Pgolden, double *x, double *t, double *fin, int nt,
-                int nf) {
+                int nf, _TIME &golden) {
+    auto begin = CLOCK_NOW;
+
     for (int i = 0; i < nf; i++) {
         double sumh_real = 0;
         double sumh_image = 0;
@@ -106,6 +124,9 @@ void lombgolden(double *Pgolden, double *x, double *t, double *fin, int nt,
         Pgolden[i] = evaluate_trig(sumh_real, sumh_image, sum2_real, sum2_image,
                                    (double)nt);
     }
+    auto end = CLOCK_NOW;
+    std::chrono::duration<double> elapsed = end - begin;
+    golden.lomb = elapsed.count();
 }
 
 void nonuni2uni1(double *f, double *x, _MYCMPX *fout, int N, int Mr, int Msp,
@@ -139,7 +160,7 @@ void nonuni2uni2(double *x, _MYCMPX *fout, int N, int Mr, int Msp, double tau,
 }
 
 void nufft(double *x, double *f, _MYCMPX *Fk, int N, int M, int R, int Msp,
-           double df, bool flag) {
+           double df, bool flag , _TIME &gaussi) {
     const unsigned int Mr = R * M;
     const double tau = PI * (Msp) / M / M / R / (R - .5);
 
@@ -148,39 +169,59 @@ void nufft(double *x, double *f, _MYCMPX *Fk, int N, int M, int R, int Msp,
 
     for (int l = 0; l <= Msp; l++) E3[l] = exp(-pow(PI * l / Mr, 2) / tau);
 
+    auto begin = CLOCK_NOW;
+
     if (!flag) {
         nonuni2uni1(f, x, Fktau, N, Mr, Msp, tau, E3, df);
     } else {
         nonuni2uni2(x, Fktau, N, Mr, Msp, tau, E3, df);
     }
+    // auto end = CLOCK_NOW;
+    // std::chrono::duration<double> elapsed = end - begin;
+    // gaussi.grid += elapsed.count();
 
-    fft_iter(Fktau, Mr);
-        LOGVAR(Mr);
+    // begin = CLOCK_NOW;
+    // fft_iter(Fktau, Mr);
+    // end = CLOCK_NOW;
+    // elapsed = end - begin;
+    // gaussi.fft += elapsed.count();
 
-    for (int k = -M / 2; k <= (M - 1) / 2; k++) {
-        int idx1 = MOD(k, Mr);
-        int idx2 = MOD(k, M);
-        Fk[idx2] = Fktau[idx1] * sqrt(PI / tau) * exp(tau * k * k) /
-                   (double)(Mr);  // can optimize here
-    }
+
+    // begin = CLOCK_NOW;
+    // for (int k = -M / 2; k <= (M - 1) / 2; k++) {
+    //     int idx1 = MOD(k, Mr);
+    //     int idx2 = MOD(k, M);
+    //     Fk[idx2] = Fktau[idx1] * sqrt(PI / tau) * exp(tau * k * k) /
+    //                (double)(Mr);  // can optimize here
+    // }
+    // end = CLOCK_NOW;
+    // elapsed = end - begin;
+    // gaussi.grid += elapsed.count();
 
     delete[] E3;
     delete[] Fktau;
 }
 
 void fastlomb_gaussian(double *Pnfft, double *x, double *t, double *fin, int nt,
-                       int nf, const unsigned int R, const unsigned int Msp) {
+                       int nf, const unsigned int R, const unsigned int Msp,
+                       _TIME &gaussi) {
     _MYCMPX *Fkh = new _MYCMPX[2 * nf];
     _MYCMPX *Fk2 = new _MYCMPX[4 * nf];
     double df = fin[0];
 
-    nufft(t, x, Fkh, nt, 2 * nf, R, Msp, df, 0);
-    nufft(t, x, Fk2, nt, 4 * nf, R, Msp, df, 1);
+     nufft(t, x, Fkh, nt, 2 * nf, R, Msp, df, 0, gaussi);
+     nufft(t, x, Fk2, nt, 4 * nf, R, Msp, df, 1, gaussi);
+
+    auto begin = CLOCK_NOW;
 
     for (int i = 0; i < nf; i++) {
         Pnfft[i] = evaluate_trig(Fkh[i + 1].real, Fkh[i + 1].imag,
                                  Fk2[2 * i + 2].real, Fk2[2 * i + 2].imag, nt);
     }
+
+    auto end = CLOCK_NOW;
+    std::chrono::duration<double> elapsed = end - begin;
+    gaussi.lomb = elapsed.count();
 
     delete[] Fkh;
     delete[] Fk2;

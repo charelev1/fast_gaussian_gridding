@@ -1,0 +1,15 @@
+
+output.o: main.o rrgen.o
+	g++ -o output.o main.o rrgen.o
+
+main.o: main_ops_total.cpp rrgenV3.h
+	g++ -c main_ops_total.cpp -lm -o main.o
+
+rrgen.o: rrgenV3.c rrgenV3.h 
+	gcc -c rrgenV3.c -lm -o rrgen.o
+
+clean:
+	rm *.o output
+
+run:
+	./output.o
